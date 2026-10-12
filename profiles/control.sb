@@ -1,0 +1,12 @@
+;; control.sb: the baseline. Deny-default, just enough to run the probe, and
+;; kern.procargs2 left open, to show a sandboxed read works at all.
+;; Identical to deny.sb and deny-regex.sb apart from the rules under test.
+(version 1)
+(deny default)
+(allow process-exec)
+(allow process-fork)
+(allow file-read*)
+(allow file-write* (literal "/dev/null"))
+(allow signal (target same-sandbox))
+(allow process-info* (target same-sandbox))
+(allow sysctl-read)

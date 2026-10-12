@@ -1,0 +1,15 @@
+;; deny-regex.sb: deny.sb with the sysctl deny widened to the form
+;; archie-judd/agent-sandbox.nix uses, which also covers kern.proc.*.
+(version 1)
+(deny default)
+(allow process-exec)
+(allow process-fork)
+(allow file-read*)
+(allow file-write* (literal "/dev/null"))
+(allow signal (target same-sandbox))
+(deny process-info* (target others))
+(allow process-info* (target same-sandbox))
+(allow sysctl-read)
+(deny sysctl-read
+  (sysctl-name-prefix "kern.procargs")
+  (sysctl-name-regex #"^kern\.proc\."))

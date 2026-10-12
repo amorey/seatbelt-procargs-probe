@@ -1,0 +1,21 @@
+name: probe
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    name: ${{ matrix.runner }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        # xcode-27 is the macOS 27 Apple-silicon label Kstack's CI uses. If no
+        # runner ever picks it up here, remove it and note that in README.md.
+        runner: [macos-15, macos-15-intel, macos-26, macos-26-intel, xcode-27]
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./run.sh
