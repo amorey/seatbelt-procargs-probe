@@ -70,5 +70,76 @@ each), against targets inside and outside the reader's session.
 
 ## Results
 
-_Not yet run. One table per runner goes here, copied from the CI job
-summaries._
+From commit `e167e94`, runs
+[probe 38282769638](https://github.com/amorey/seatbelt-procargs-probe/actions/runs/38282769638)
+and
+[upstream 38282769745](https://github.com/amorey/seatbelt-procargs-probe/actions/runs/38282769745).
+Every runner in a workflow produced the same table, so each table appears
+once. SIP is reported disabled on every runner.
+
+| runner | macOS | build | arch |
+|---|---|---|---|
+| macos-15 | 15.7.9 | 24G830 | arm64 |
+| macos-15-intel | 15.7.9 | 24G830 | x86_64 |
+| macos-26 | 26.6.2 | 25G83 | arm64 |
+| macos-26-intel | 26.6.1 | 25G76 | x86_64 |
+| xcode-27 | 27.0.1 | 26A434 | arm64 |
+
+### `run.sh` (all five runners)
+
+| target | apple binary | relation | unsandboxed | control.sb | deny.sb | deny-regex.sb |
+|---|---|---|---|---|---|---|
+| sh-unrelated | yes | unrelated | read (args, env) | read (args, env) | read (args, env) | read (args, env) |
+| probe-unrelated | no | unrelated | read (args, env) | read (args, env) | read (args, env) | read (args, env) |
+| sh-ancestor | yes | ancestor | read (args, env) | read (args, env) | read (args, env) | read (args, env) |
+| probe-ancestor | no | ancestor | read (args, env) | read (args, env) | read (args, env) | read (args, env) |
+
+### `session-matrix.sh` (all five runners)
+
+| target | reader started in | unsandboxed | control.sb | deny-info.sb | deny-sysctl.sb | deny.sb | deny-regex.sb |
+|---|---|---|---|---|---|---|---|
+| same-session | this session | read | read | read | read | read | read |
+| same-session | new process group | read | read | read | read | EPERM @size | EPERM @size |
+| same-session | new session | read | read | read | read | EPERM @size | EPERM @size |
+| ancestor | this session | read | read | read | read | read | read |
+| ancestor | new process group | read | read | read | read | EPERM @size | EPERM @size |
+| ancestor | new session | read | read | read | read | EPERM @size | EPERM @size |
+| own-session | this session | read | read | read | read | EPERM @size | EPERM @size |
+| own-session | new process group | read | read | read | read | EPERM @size | EPERM @size |
+| own-session | new session | read | read | read | read | EPERM @size | EPERM @size |
+
+### agent-sandbox.nix v5.5.1 (macos-26 and xcode-27)
+
+Their `test_sysctl.py`: passed on both.
+
+`run.sh` with the profile their test generated as `upstream.sb`:
+
+| target | apple binary | relation | unsandboxed | control.sb | deny.sb | deny-regex.sb | upstream.sb |
+|---|---|---|---|---|---|---|---|
+| sh-unrelated | yes | unrelated | read (args, env) | read (args, env) | read (args, env) | read (args, env) | read (args, env) |
+| probe-unrelated | no | unrelated | read (args, env) | read (args, env) | read (args, env) | read (args, env) | read (args, env) |
+| sh-ancestor | yes | ancestor | read (args, env) | read (args, env) | read (args, env) | read (args, env) | read (args, env) |
+| probe-ancestor | no | ancestor | read (args, env) | read (args, env) | read (args, env) | read (args, env) | read (args, env) |
+
+`launch-matrix.sh`. For `lua`, "all" is the errnos for `kern.proc.all`,
+`kern.procargs` and `kern.procargs2`, where 0 is a read and 1 is EPERM:
+
+| reader | target | unsandboxed | deny-regex.sb | their profile, direct | their profile, child of sh | their launcher |
+|---|---|---|---|---|---|---|
+| c | unrelated | read | read | read | read | read |
+| c | ancestor | read | read | read | read | read |
+| lua | unrelated | read (all: 0 0 0) | read (all: 1 0 0) | read (all: 1 0 0) | read (all: 1 0 0) | read (all: 1 0 0) |
+| lua | ancestor | read (all: 0 0 0) | read (all: 1 0 0) | read (all: 1 0 0) | read (all: 1 0 0) | read (all: 1 0 0) |
+
+`test_procargs_targets.py`, their probe through their harness. Their harness
+starts the launcher with `start_new_session=True`; the two `-ancestor` targets
+start it themselves, without a new session:
+
+| target | process | probe.lua output |
+|---|---|---|
+| pytest-self | Nix `python3.14` | `1 1 1` |
+| pytest-parent | `/bin/bash` | `1 1 1` |
+| sh-child | `/bin/sh` | `1 1 1` |
+| python-child | Nix `python3.14` | `1 1 1` |
+| sh-ancestor | `/bin/sh` | `1 0 0` |
+| python-ancestor | Nix `python3.14` | `1 0 0` |
