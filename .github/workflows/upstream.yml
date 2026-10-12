@@ -1,0 +1,83 @@
+name: upstream
+
+# Runs archie-judd/agent-sandbox.nix's own kern.procargs2 test, unmodified, at
+# the tag discussed in anthropics/sandbox-runtime#160, then measures our probe
+# under the exact profile that test generated. Nothing of theirs is copied into
+# this repo; it is checked out at a pinned commit for the run.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  UPSTREAM_REPO: archie-judd/agent-sandbox.nix
+  UPSTREAM_SHA: da1af869c23467d3053b454583a5f4e0c832fbb1 # v5.5.1
+
+jobs:
+  upstream:
+    name: ${{ matrix.runner }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # macos-26 is the image their CI ran on; xcode-27 is the commenter's OS.
+        runner: [macos-26, xcode-27]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.UPSTREAM_REPO }}
+          ref: ${{ env.UPSTREAM_SHA }}
+          path: upstream
+          persist-credentials: false
+
+      # Same installer, pinned to the same commit and inputs as their test.yml.
+      - uses: DeterminateSystems/nix-installer-action@e50d5f73bfe71c2dd0aa4218de8f4afa59f8f81d # v16
+        with:
+          trust-runner-user: false
+          extra-conf: sandbox = true
+
+      # Their test, verbose and without xdist so the log names its outcome.
+      # A fixed basetemp keeps the session directory, and with it the profile.
+      - name: Their test_sysctl.py
+        working-directory: upstream
+        run: >
+          nix develop -c pytest -v -rA
+          --basetemp "$RUNNER_TEMP/pytest"
+          tests/integration/test_sysctl.py
+
+      - name: Their generated profile
+        id: profile
+        if: ${{ !cancelled() }}
+        run: |
+          profile=$(find "$RUNNER_TEMP/pytest" -name seatbelt.sb | head -n 1)
+          [ -n "$profile" ] || { echo "no seatbelt.sb under $RUNNER_TEMP/pytest"; exit 1; }
+          # Their profile allows exec only in the launch workspace and the Nix
+          # closure, so the probe has to be built into that workspace.
+          workspace=$(sed -n '/^;; Process execution/{n;s/^(allow process-exec (subpath "\(.*\)"))$/\1/p;}' "$profile")
+          [ -d "$workspace" ] || { echo "workspace '$workspace' from the profile does not exist"; exit 1; }
+          echo "path=$profile" >>"$GITHUB_OUTPUT"
+          echo "workspace=$workspace" >>"$GITHUB_OUTPUT"
+          echo "profile: $profile"
+          echo "workspace: $workspace"
+          cat "$profile"
+          cp "$profile" "$RUNNER_TEMP/upstream.sb"
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() && steps.profile.outcome == 'success' }}
+        with:
+          name: upstream-profile-${{ matrix.runner }}
+          path: ${{ runner.temp }}/upstream.sb
+
+      - name: Our probe under their profile
+        if: ${{ !cancelled() && steps.profile.outcome == 'success' }}
+        env:
+          EXTRA_PROFILE: ${{ steps.profile.outputs.path }}
+          PROBE_DIR: ${{ steps.profile.outputs.workspace }}
+        run: ./run.sh

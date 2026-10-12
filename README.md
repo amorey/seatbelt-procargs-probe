@@ -43,6 +43,14 @@ was refused.
 | `deny.sb` | `control.sb` + `(deny process-info* (target others))` + `(deny sysctl-read (sysctl-name-prefix "kern.procargs"))` |
 | `deny-regex.sb` | `deny.sb` with the sysctl deny also matching `^kern\.proc\.` |
 
+## Their test
+
+`.github/workflows/upstream.yml` checks out
+[archie-judd/agent-sandbox.nix](https://github.com/archie-judd/agent-sandbox.nix)
+at v5.5.1 and runs its `tests/integration/test_sysctl.py`, unmodified. It then
+reruns `run.sh` with the profile that test generated as an extra
+`upstream.sb` column (via `EXTRA_PROFILE` and `PROBE_DIR`, see `run.sh`).
+
 ## Results
 
 _Not yet run. One table per runner goes here, copied from the CI job

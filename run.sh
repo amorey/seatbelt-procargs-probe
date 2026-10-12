@@ -5,13 +5,27 @@
 # The exit status says only whether the harness worked, never what the table
 # shows: non-zero means the probe did not build, a profile was not enforced, a
 # target was not alive when measured, or the probe printed no result line.
+#
+# Optional, for measuring someone else's profile as one more column:
+#   EXTRA_PROFILE  path to a profile, reported as upstream.sb
+#   PROBE_DIR      where to build the probe, for a profile that allows exec
+#                  only in certain directories
 set -u
 
 here=$(cd "$(dirname "$0")" && pwd)
 work=$(mktemp -d "${TMPDIR:-/tmp}/seatbelt-procargs-probe.XXXXXX") || exit 1
-probe="$work/probe"
+probe="${PROBE_DIR:-$work}/probe"
 conditions="unsandboxed control deny deny-regex"
+[ -n "${EXTRA_PROFILE:-}" ] && conditions="$conditions upstream"
 pids=""
+
+profile() {
+	if [ "$1" = upstream ]; then
+		echo "$EXTRA_PROFILE"
+	else
+		echo "$here/profiles/$1.sb"
+	fi
+}
 
 stop_target() {
 	# The /bin/sh targets have a `sleep` child that would outlive them.
@@ -22,6 +36,7 @@ stop_target() {
 
 cleanup() {
 	for p in $pids; do stop_target "$p"; done
+	[ -n "${PROBE_DIR:-}" ] && rm -f "$probe"
 	rm -rf "$work"
 }
 trap cleanup EXIT
@@ -43,8 +58,8 @@ cc -O0 -Wall -o "$probe" "$here/probe.c" || fail "probe did not build"
 # --- enforcement check -------------------------------------------------------
 
 # A read under a profile means nothing unless the profile is enforced. Each
-# one is (deny default) with writes allowed only to /dev/null, so a file write
-# under it must fail. The unsandboxed write shows the check can see a write.
+# one is (deny default) and allows no writes under $TMPDIR, so a file write
+# there must fail. The unsandboxed write shows the check can see a write.
 try_write() {
 	"$@" /bin/sh -c ': >"$1"' sh "$canary" 2>/dev/null
 	[ -e "$canary" ]
@@ -55,7 +70,7 @@ try_write || fail "unsandboxed file write failed, so the enforcement check canno
 for cond in $conditions; do
 	[ "$cond" = unsandboxed ] && continue
 	canary="$work/canary-$cond"
-	if try_write /usr/bin/sandbox-exec -f "$here/profiles/$cond.sb"; then
+	if try_write /usr/bin/sandbox-exec -f "$(profile "$cond")"; then
 		fail "$cond.sb did not block a file write, so it is not being enforced"
 	fi
 done
@@ -76,7 +91,7 @@ signing() {
 	signing /bin/sh
 	echo "codesign probe (built by this run):"
 	signing "$probe"
-	echo "enforcement: control.sb, deny.sb and deny-regex.sb each blocked a file write"
+	echo "enforcement: every profile blocked a file write"
 } >"$work/env"
 cat "$work/env"
 echo
@@ -112,10 +127,6 @@ record() {
 		esac
 		;;
 	esac
-}
-
-profile() {
-	echo "$here/profiles/$1.sb"
 }
 
 # Starts an unrelated target in the background. `env -i` puts the env marker in
@@ -198,8 +209,13 @@ echo "$row |" >>"$work/rows"
 # --- report ------------------------------------------------------------------
 
 {
-	echo "| target | apple binary | relation | unsandboxed | control.sb | deny.sb | deny-regex.sb |"
-	echo "|---|---|---|---|---|---|---|"
+	printf '| target | apple binary | relation |'
+	for cond in $conditions; do
+		case $cond in unsandboxed) printf ' %s |' "$cond" ;; *) printf ' %s.sb |' "$cond" ;; esac
+	done
+	printf '\n|---|---|---|'
+	for cond in $conditions; do printf -- '---|'; done
+	echo
 	cat "$work/rows"
 } >"$work/table"
 cat "$work/table"
