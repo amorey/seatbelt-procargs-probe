@@ -112,6 +112,22 @@ once. SIP is reported disabled on every runner.
 | own-session | new process group | read | read | read | read | EPERM @size | EPERM @size |
 | own-session | new session | read | read | read | read | EPERM @size | EPERM @size |
 
+### `rejoin.sh` (all five runners)
+
+From commit `1e68fc3`, run
+[probe 38284450987](https://github.com/amorey/seatbelt-procargs-probe/actions/runs/38284450987).
+
+| target | sandbox started in | rejoins target group | control.sb | deny.sb | deny-regex.sb |
+|---|---|---|---|---|---|
+| same-group | new process group | no | read | EPERM @size | EPERM @size |
+| same-group | new process group | yes | joined, read | joined, read | joined, read |
+| same-group | new session | no | read | EPERM @size | EPERM @size |
+| same-group | new session | yes | join EPERM, read | join EPERM, EPERM @size | join EPERM, EPERM @size |
+| ancestor | new process group | no | read | EPERM @size | EPERM @size |
+| ancestor | new process group | yes | joined, read | joined, read | joined, read |
+| ancestor | new session | no | read | EPERM @size | EPERM @size |
+| ancestor | new session | yes | join EPERM, read | join EPERM, EPERM @size | join EPERM, EPERM @size |
+
 ### agent-sandbox.nix v5.5.1 (macos-26 and xcode-27)
 
 Their `test_sysctl.py`: passed on both.
