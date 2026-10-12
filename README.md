@@ -56,6 +56,11 @@ probe and their `probe.lua` under LuaJIT, each run unsandboxed, under
 `deny-regex.sb`, under their profile directly, under their profile as a child
 of a shell inside the sandbox, and through their launcher.
 
+`experiments/test_procargs_targets.py` is copied into their test directory at
+run time and reruns their probe, through their harness, against other
+targets: pytest itself, its parent, a `/bin/sh` and a Python started by
+pytest, and a `/bin/sh` and a Python that are ancestors of the sandbox.
+
 ## Results
 
 _Not yet run. One table per runner goes here, copied from the CI job

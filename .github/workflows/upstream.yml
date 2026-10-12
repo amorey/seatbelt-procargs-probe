@@ -117,5 +117,31 @@ jobs:
             [ -f "$f" ] || continue
             echo "== $f"
             diff <(sed -E 's#/[^ "]*(sessions|pytest)/[^ "]*#<session>#g' "${{ steps.profile.outputs.path }}") \
-                 <(sed -E 's#/[^ "]*(sessions|pytest)/[^ "]*#<session>#g' "$f") && echo "same rules"
+                 <(sed -E 's#/[^ "]*(sessions|pytest)/[^ "]*#<session>#g' "$f") &&
+              echo "same rules" || echo "(differences above; informational only)"
           done
+          exit 0
+
+      # Their harness and probe, unchanged; only the target pid differs.
+      - name: Their probe against other targets
+        if: ${{ !cancelled() && steps.profile.outcome == 'success' }}
+        working-directory: upstream
+        env:
+          PROCARGS_RESULTS: ${{ runner.temp }}/targets.md
+        run: |
+          cp ../experiments/test_procargs_targets.py tests/integration/
+          nix develop -c pytest -v -s -rA --basetemp "$RUNNER_TEMP/pytest-targets" \
+            tests/integration/test_procargs_targets.py
+
+      - name: Target results
+        if: ${{ !cancelled() && steps.profile.outcome == 'success' }}
+        run: |
+          {
+            echo "## their probe by target: $(sw_vers -productVersion) ($(uname -m))"
+            echo
+            echo "Errnos for kern.proc.all, kern.procargs, kern.procargs2; 0 is a read, 1 is EPERM."
+            echo
+            echo "| target | process | probe.lua output |"
+            echo "|---|---|---|"
+            cat "$RUNNER_TEMP/targets.md"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
