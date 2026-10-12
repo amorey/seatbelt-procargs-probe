@@ -51,6 +51,11 @@ at v5.5.1 and runs its `tests/integration/test_sysctl.py`, unmodified. It then
 reruns `run.sh` with the profile that test generated as an extra
 `upstream.sb` column (via `EXTRA_PROFILE` and `PROBE_DIR`, see `run.sh`).
 
+`experiments/launch-matrix.sh` then splits the reader from the launch: our C
+probe and their `probe.lua` under LuaJIT, each run unsandboxed, under
+`deny-regex.sb`, under their profile directly, under their profile as a child
+of a shell inside the sandbox, and through their launcher.
+
 ## Results
 
 _Not yet run. One table per runner goes here, copied from the CI job

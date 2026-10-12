@@ -62,8 +62,14 @@ jobs:
           # closure, so the probe has to be built into that workspace.
           workspace=$(sed -n '/^;; Process execution/{n;s/^(allow process-exec (subpath "\(.*\)"))$/\1/p;}' "$profile")
           [ -d "$workspace" ] || { echo "workspace '$workspace' from the profile does not exist"; exit 1; }
+          # The luajit their test ran, from the closure the profile grants.
+          luajit=$(grep -o '/nix/store/[^"]*-luajit-[^"/]*' "$profile" | sort -u |
+            while read -r p; do [ -x "$p/bin/luajit" ] && echo "$p/bin/luajit"; done | head -n 1)
+          [ -n "$luajit" ] || { echo "no luajit in the profile's closure"; exit 1; }
           echo "path=$profile" >>"$GITHUB_OUTPUT"
           echo "workspace=$workspace" >>"$GITHUB_OUTPUT"
+          echo "luajit=$luajit" >>"$GITHUB_OUTPUT"
+          echo "luajit: $luajit"
           echo "profile: $profile"
           echo "workspace: $workspace"
           cat "$profile"
@@ -81,3 +87,35 @@ jobs:
           EXTRA_PROFILE: ${{ steps.profile.outputs.path }}
           PROBE_DIR: ${{ steps.profile.outputs.workspace }}
         run: ./run.sh
+
+      # The same fixture their test builds, so the launcher is theirs as is.
+      - name: Their launcher
+        id: launcher
+        if: ${{ !cancelled() && steps.profile.outcome == 'success' }}
+        run: |
+          nix-build --out-link "$RUNNER_TEMP/fixture" \
+            upstream/tests/integration/fixtures/sysctl-narrowed-sandbox.nix
+          bin=$(ls "$RUNNER_TEMP"/fixture/bin/*)
+          echo "bin=$bin" >>"$GITHUB_OUTPUT"
+          echo "launcher: $bin"
+
+      - name: Launch matrix
+        if: ${{ !cancelled() && steps.launcher.outcome == 'success' }}
+        env:
+          PROFILE: ${{ steps.profile.outputs.path }}
+          WORKSPACE: ${{ steps.profile.outputs.workspace }}
+          LUAJIT: ${{ steps.profile.outputs.luajit }}
+          SANDBOXED_BASH: ${{ steps.launcher.outputs.bin }}
+        run: sh experiments/launch-matrix.sh
+
+      - name: Profiles their launcher wrote for the matrix
+        if: ${{ !cancelled() && steps.launcher.outcome == 'success' }}
+        run: |
+          # The launcher writes a fresh profile per launch. Diff each against the
+          # test's, ignoring per-session paths, to show they are the same rules.
+          for f in "$RUNNER_TEMP"/sessions/*/seatbelt.sb; do
+            [ -f "$f" ] || continue
+            echo "== $f"
+            diff <(sed -E 's#/[^ "]*(sessions|pytest)/[^ "]*#<session>#g' "${{ steps.profile.outputs.path }}") \
+                 <(sed -E 's#/[^ "]*(sessions|pytest)/[^ "]*#<session>#g' "$f") && echo "same rules"
+          done
