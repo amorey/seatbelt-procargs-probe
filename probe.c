@@ -5,11 +5,13 @@
  *   probe sleep  <seconds> <arg-marker>
  *   probe launch <profile-path|none> <arg-marker>
  *   probe detach <none|pgrp|session> <absolute-path> [args...]
+ *   probe join   <pgid> <absolute-path> [args...]
  *
  * read, sleep and launch print exactly one result line to stdout. A refused
  * read is a result, not an error: the exit status is non-zero only on a usage
  * error or when the harness itself breaks (no result line is printed then).
- * detach prints nothing itself; it becomes the command it runs.
+ * detach prints nothing itself and join prints one line first; both then
+ * become the command they run.
  */
 #include <errno.h>
 #include <limits.h>
@@ -35,6 +37,7 @@ static int usage(void)
 	    "       probe sleep <seconds> <arg-marker>\n"
 	    "       probe launch <profile-path|none> <arg-marker>\n"
 	    "       probe detach <none|pgrp|session> <absolute-path> [args...]\n"
+	    "       probe join <pgid> <absolute-path> [args...]\n"
 	    "         (launch takes the env marker from $" ENV_NAME ")\n");
 	return 2;
 }
@@ -183,6 +186,29 @@ static int do_detach(const char *how, char **cmd)
 	return 1;
 }
 
+static int do_join(const char *pgid, char **cmd)
+{
+	long n;
+
+	if (!parse_long(pgid, &n) || n <= 0)
+		return usage();
+	/*
+	 * Code inside the sandbox moving itself back into a process group outside
+	 * it. POSIX allows that within one session, so it is what a launcher that
+	 * only calls setpgid() would have to withstand.
+	 */
+	if (setpgid(0, (pid_t)n) == 0) {
+		printf("join ok pgid=%d\n", (int)getpgrp());
+	} else {
+		int e = errno;
+		printf("join refused errno=%d name=%s\n", e, errno_name(e));
+	}
+	fflush(stdout);
+	execv(cmd[0], cmd);
+	perror("execv");
+	return 1;
+}
+
 int main(int argc, char **argv)
 {
 	long n;
@@ -195,5 +221,7 @@ int main(int argc, char **argv)
 		return do_launch(argv[2], argv[3]);
 	if (argc >= 4 && strcmp(argv[1], "detach") == 0)
 		return do_detach(argv[2], argv + 3);
+	if (argc >= 4 && strcmp(argv[1], "join") == 0)
+		return do_join(argv[2], argv + 3);
 	return usage();
 }

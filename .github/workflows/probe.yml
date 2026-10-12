@@ -22,3 +22,6 @@ jobs:
       - name: Session matrix
         if: ${{ !cancelled() }}
         run: sh experiments/session-matrix.sh
+      - name: Rejoin
+        if: ${{ !cancelled() }}
+        run: sh experiments/rejoin.sh

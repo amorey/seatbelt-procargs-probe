@@ -68,6 +68,10 @@ session, in a new process group, and in a new session (`probe detach`), under
 each profile plus `deny-info.sb` and `deny-sysctl.sb` (one of the two rules
 each), against targets inside and outside the reader's session.
 
+`experiments/rejoin.sh` starts the sandbox in a new process group or a new
+session, and has the code inside it try to move back into the target's
+process group (`probe join`, which calls `setpgid()`) before reading.
+
 ## Results
 
 From commit `e167e94`, runs
