@@ -3,8 +3,8 @@
 # each profile? Prints the environment, then one markdown table.
 #
 # The exit status says only whether the harness worked, never what the table
-# shows: non-zero means the probe did not build, a target was not alive when
-# measured, or the probe printed no result line.
+# shows: non-zero means the probe did not build, a profile was not enforced, a
+# target was not alive when measured, or the probe printed no result line.
 set -u
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -40,6 +40,26 @@ marker() {
 
 cc -O0 -Wall -o "$probe" "$here/probe.c" || fail "probe did not build"
 
+# --- enforcement check -------------------------------------------------------
+
+# A read under a profile means nothing unless the profile is enforced. Each
+# one is (deny default) with writes allowed only to /dev/null, so a file write
+# under it must fail. The unsandboxed write shows the check can see a write.
+try_write() {
+	"$@" /bin/sh -c ': >"$1"' sh "$canary" 2>/dev/null
+	[ -e "$canary" ]
+}
+
+canary="$work/canary-unsandboxed"
+try_write || fail "unsandboxed file write failed, so the enforcement check cannot work"
+for cond in $conditions; do
+	[ "$cond" = unsandboxed ] && continue
+	canary="$work/canary-$cond"
+	if try_write /usr/bin/sandbox-exec -f "$here/profiles/$cond.sb"; then
+		fail "$cond.sb did not block a file write, so it is not being enforced"
+	fi
+done
+
 # --- environment -------------------------------------------------------------
 
 signing() {
@@ -56,6 +76,7 @@ signing() {
 	signing /bin/sh
 	echo "codesign probe (built by this run):"
 	signing "$probe"
+	echo "enforcement: control.sb, deny.sb and deny-regex.sb each blocked a file write"
 } >"$work/env"
 cat "$work/env"
 echo

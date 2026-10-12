@@ -18,7 +18,9 @@ results should be.
 
 It needs only the Xcode Command Line Tools. It builds `probe.c`, prints the OS
 version, architecture, SIP status and code-signing details, then one table.
-The exit status is non-zero only if the harness itself broke.
+Before measuring, it checks that each profile is enforced by trying a file
+write that `(deny default)` must block. The exit status is non-zero only if
+the harness itself broke, including a profile that was not enforced.
 
 ## What it measures
 
