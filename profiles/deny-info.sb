@@ -1,0 +1,12 @@
+;; deny-info.sb: control.sb plus only the process-info* deny from deny.sb,
+;; to see what that rule does on its own.
+(version 1)
+(deny default)
+(allow process-exec)
+(allow process-fork)
+(allow file-read*)
+(allow file-write* (literal "/dev/null"))
+(allow signal (target same-sandbox))
+(deny process-info* (target others))
+(allow process-info* (target same-sandbox))
+(allow sysctl-read)

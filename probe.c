@@ -4,10 +4,12 @@
  *   probe read   <pid> <arg-marker> <env-marker>
  *   probe sleep  <seconds> <arg-marker>
  *   probe launch <profile-path|none> <arg-marker>
+ *   probe detach <none|pgrp|session> <absolute-path> [args...]
  *
- * Every mode prints exactly one result line to stdout. A refused read is a
- * result, not an error: the exit status is non-zero only on a usage error or
- * when the harness itself breaks (no result line is printed then).
+ * read, sleep and launch print exactly one result line to stdout. A refused
+ * read is a result, not an error: the exit status is non-zero only on a usage
+ * error or when the harness itself breaks (no result line is printed then).
+ * detach prints nothing itself; it becomes the command it runs.
  */
 #include <errno.h>
 #include <limits.h>
@@ -32,6 +34,7 @@ static int usage(void)
 	    "usage: probe read <pid> <arg-marker> <env-marker>\n"
 	    "       probe sleep <seconds> <arg-marker>\n"
 	    "       probe launch <profile-path|none> <arg-marker>\n"
+	    "       probe detach <none|pgrp|session> <absolute-path> [args...]\n"
 	    "         (launch takes the env marker from $" ENV_NAME ")\n");
 	return 2;
 }
@@ -155,6 +158,31 @@ static int do_launch(const char *profile, const char *arg)
 	return WIFEXITED(status) ? WEXITSTATUS(status) : 1;
 }
 
+static int do_detach(const char *how, char **cmd)
+{
+	/*
+	 * agent-sandbox.nix's test harness starts its sandbox with setsid(). This
+	 * reproduces that, or only a new process group, then runs the command in
+	 * this same process, so a background target keeps the pid it was given.
+	 */
+	if (strcmp(how, "session") == 0) {
+		if (setsid() < 0) {
+			perror("setsid");
+			return 1;
+		}
+	} else if (strcmp(how, "pgrp") == 0) {
+		if (setpgid(0, 0) != 0) {
+			perror("setpgid");
+			return 1;
+		}
+	} else if (strcmp(how, "none") != 0) {
+		return usage();
+	}
+	execv(cmd[0], cmd);
+	perror("execv");
+	return 1;
+}
+
 int main(int argc, char **argv)
 {
 	long n;
@@ -165,5 +193,7 @@ int main(int argc, char **argv)
 		return do_sleep(n);
 	if (argc == 4 && strcmp(argv[1], "launch") == 0)
 		return do_launch(argv[2], argv[3]);
+	if (argc >= 4 && strcmp(argv[1], "detach") == 0)
+		return do_detach(argv[2], argv + 3);
 	return usage();
 }

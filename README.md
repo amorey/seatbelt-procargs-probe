@@ -61,6 +61,13 @@ run time and reruns their probe, through their harness, against other
 targets: pytest itself, its parent, a `/bin/sh` and a Python started by
 pytest, and a `/bin/sh` and a Python that are ancestors of the sandbox.
 
+## Sessions
+
+`experiments/session-matrix.sh` starts the sandboxed reader in the caller's
+session, in a new process group, and in a new session (`probe detach`), under
+each profile plus `deny-info.sb` and `deny-sysctl.sb` (one of the two rules
+each), against targets inside and outside the reader's session.
+
 ## Results
 
 _Not yet run. One table per runner goes here, copied from the CI job
