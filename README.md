@@ -79,7 +79,8 @@ From commit `e167e94`, runs
 and
 [upstream 38282769745](https://github.com/amorey/seatbelt-procargs-probe/actions/runs/38282769745).
 Every runner in a workflow produced the same table, so each table appears
-once. SIP is reported disabled on every runner.
+once. SIP is reported disabled on every runner; one local run with SIP
+enabled is listed separately below.
 
 | runner | macOS | build | arch |
 |---|---|---|---|
@@ -127,6 +128,19 @@ From commit `1e68fc3`, run
 | ancestor | new process group | yes | joined, read | joined, read | joined, read |
 | ancestor | new session | no | read | EPERM @size | EPERM @size |
 | ancestor | new session | yes | join EPERM, read | join EPERM, EPERM @size | join EPERM, EPERM @size |
+
+### Local Mac with SIP enabled
+
+macOS 27.0.1 (26A434), arm64, SIP enabled, run by hand from Terminal at
+commit `823b7ad`. `session-matrix.sh` and `rejoin.sh` gave the same tables as
+CI. `run.sh` differed for `/bin/sh`:
+
+| target | apple binary | relation | unsandboxed | control.sb | deny.sb | deny-regex.sb |
+|---|---|---|---|---|---|---|
+| sh-unrelated | yes | unrelated | read (args) | read (args) | read (args) | read (args) |
+| probe-unrelated | no | unrelated | read (args, env) | read (args, env) | read (args, env) | read (args, env) |
+| sh-ancestor | yes | ancestor | read (args) | read (args) | read (args) | read (args) |
+| probe-ancestor | no | ancestor | read (args, env) | read (args, env) | read (args, env) | read (args, env) |
 
 ### agent-sandbox.nix v5.5.1 (macos-26 and xcode-27)
 
